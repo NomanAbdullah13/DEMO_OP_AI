@@ -1,5 +1,5 @@
 import streamlit as st
-from openai import OpenAI
+import openai
 import requests
 from bs4 import BeautifulSoup
 import faiss
@@ -94,16 +94,15 @@ class CompanyChatBot:
             relevant_chunks = self._get_relevant_chunks(user_query)
             context = "\n".join(relevant_chunks) if relevant_chunks else "No relevant context found."
             
-            # Initialize OpenAI client (without proxies)
-            client = OpenAI(api_key=self.api_key)
+            # Set the OpenAI API key directly
+            openai.api_key = self.api_key
             
-            response = client.chat.completions.create(
+            # Make the request to the OpenAI API
+            response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 max_tokens=350,  # Increased slightly for better responses
                 messages=[
-                    {
-                        "role": "system", 
-                        "content": """You are a compassionate and empathetic Optimal performance coach assistant. Your role is to:
+                    {"role": "system", "content": """You are a compassionate and empathetic Optimal performance coach assistant. Your role is to:
 1. Actively listen and validate the user's feelings
 2. Ask thoughtful, open-ended questions to understand their situation deeply
 3. Provide supportive guidance while helping them find their own solutions
@@ -128,8 +127,7 @@ Remember:
 - Privacy is important - reassure users their conversations are confidential
 - Be patient and allow the conversation to unfold naturally
 - Use reflective language ("It sounds like...", "I hear you saying...")
-- Balance empathy with gentle challenges to unhelpful thinking patterns"""
-                    },
+- Balance empathy with gentle challenges to unhelpful thinking patterns"""}, 
                     {"role": "system", "content": f"Company context (use when relevant):\n{context}"},
                     {"role": "user", "content": user_query}
                 ],
