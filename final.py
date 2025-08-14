@@ -237,7 +237,12 @@ class CompanyChatBot:
 - Maintain confidentiality and safety
 - End with thoughtful questions when appropriate
 
-Remember: You're facilitating their own wisdom and growth. 🌱"""
+Remember:
+- If user asks direct question not related to company content, respond with I cannot answer that or something like that"
+- Privacy is important - reassure users their conversations are confidential
+- Be patient and allow the conversation to unfold naturally
+- Use reflective language ("It sounds like...", "I hear you saying...")
+- Balance empathy with gentle challenges to unhelpful thinking patterns"""
                 },
                 {
                     "role": "system", 
@@ -379,3 +384,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
