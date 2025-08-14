@@ -1,13 +1,12 @@
 import streamlit as st
-from openai import OpenAI
 import requests
 from bs4 import BeautifulSoup
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import os
-import time
+import json
 
-# MUST be the very first Streamlit command - DO NOT MOVE THIS
+# MUST be the very first Streamlit command
 st.set_page_config(
     page_title="OP AI Coach", 
     page_icon="🤖",
@@ -26,11 +25,10 @@ class CompanyChatBot:
         self.chunk_embeddings = []
         # Initialize components
         self._initialize_embeddings_model()
-        self.client = self._initialize_openai_client()
         self._setup_embeddings()
 
     def _initialize_embeddings_model(self):
-        """Initialize sentence transformer model with error handling"""
+        """Initialize sentence transformer model"""
         try:
             with st.spinner("🔧 Loading AI model..."):
                 self.embeddings_model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -38,68 +36,8 @@ class CompanyChatBot:
             st.error(f"Error loading embeddings model: {e}")
             self.embeddings_model = None
 
-    def _initialize_openai_client(self):
-        """Initialize OpenAI client with multiple fallback methods"""
-        if not self.api_key:
-            st.error("🔑 **OpenAI API Key Missing!**")
-            st.info("""
-            **To fix this:**
-            1. Go to your Streamlit Cloud app settings
-            2. Click on "Secrets" tab
-            3. Add: `OPENAI_API_KEY = "your-api-key-here"`
-            4. Save and restart the app
-            """)
-            return None
-        
-        # Try multiple initialization methods
-        initialization_methods = [
-            # Method 1: Minimal initialization
-            lambda: OpenAI(api_key=self.api_key),
-            
-            # Method 2: With explicit base URL
-            lambda: OpenAI(
-                api_key=self.api_key,
-                base_url="https://api.openai.com/v1"
-            ),
-            
-            # Method 3: With timeout but no other params
-            lambda: OpenAI(
-                api_key=self.api_key,
-                timeout=30.0
-            ),
-            
-            # Method 4: Direct HTTP approach (fallback)
-            lambda: self._create_direct_client()
-        ]
-        
-        for i, method in enumerate(initialization_methods, 1):
-            try:
-                client = method()
-                # Test the client with a simple call
-                try:
-                    # Quick test - don't actually call the API, just initialize
-                    if hasattr(client, 'api_key'):
-                        return client
-                except:
-                    pass
-                return client
-            except Exception as e:
-                if i == len(initialization_methods):
-                    st.error(f"❌ All OpenAI client initialization methods failed. Last error: {e}")
-                    return None
-                continue
-        
-        return None
-    
-    def _create_direct_client(self):
-        """Fallback: Create client with minimal configuration"""
-        import openai
-        # Set the API key directly (older method)
-        openai.api_key = self.api_key
-        return OpenAI(api_key=self.api_key)
-
     def _scrape_website(self):
-        """Scrape website content with robust error handling"""
+        """Scrape website content"""
         try:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -111,40 +49,35 @@ class CompanyChatBot:
                 
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
-                # Remove script and style elements
+                # Remove unwanted elements
                 for script in soup(["script", "style", "nav", "footer"]):
                     script.decompose()
                 
-                # Extract relevant text content
+                # Extract text
                 texts = soup.find_all(['p', 'li', 'h1', 'h2', 'h3', 'h4', 'div'])
                 content = []
                 
                 for text in texts:
                     text_content = text.get_text().strip()
-                    if text_content and len(text_content) > 20:  # Filter out short/empty texts
+                    if text_content and len(text_content) > 20:
                         content.append(text_content)
                 
                 full_content = "\n".join(content)
                 
-                # Limit content size for processing
                 if len(full_content) > 15000:
                     full_content = full_content[:15000]
                 
-                return full_content if full_content else "Optimal Performance coaching services and resources available."
+                return full_content if full_content else "Optimal Performance coaching services available."
                 
-        except requests.RequestException as e:
-            st.warning(f"⚠️ Could not load website content: {e}")
-            return "Website content could not be loaded. I can still help with general performance coaching questions."
         except Exception as e:
-            st.warning(f"⚠️ Error processing website: {e}")
-            return "I can help you with performance coaching questions based on general knowledge."
+            st.warning(f"⚠️ Could not load website content: {e}")
+            return "I can help with general performance coaching questions."
     
     def _chunk_text(self, text, chunk_size=400):
-        """Split text into manageable chunks"""
+        """Split text into chunks"""
         if not text or len(text.strip()) == 0:
             return ["General performance coaching information available."]
         
-        # Split by sentences first, then by words if needed
         sentences = text.split('. ')
         chunks = []
         current_chunk = []
@@ -163,10 +96,10 @@ class CompanyChatBot:
         if current_chunk:
             chunks.append('. '.join(current_chunk))
         
-        return chunks if chunks else ["General performance coaching information available."]
+        return chunks if chunks else ["General coaching information available."]
     
     def _cosine_similarity(self, vec1, vec2):
-        """Calculate cosine similarity between two vectors"""
+        """Calculate cosine similarity"""
         try:
             dot_product = np.dot(vec1, vec2)
             norm1 = np.linalg.norm(vec1)
@@ -174,54 +107,46 @@ class CompanyChatBot:
             if norm1 == 0 or norm2 == 0:
                 return 0
             return dot_product / (norm1 * norm2)
-        except Exception:
+        except:
             return 0
     
     def _setup_embeddings(self):
-        """Setup embeddings for semantic search"""
+        """Setup embeddings"""
         if not self.embeddings_model:
             st.error("❌ Embeddings model not available")
             return
             
         try:
-            with st.spinner("🔍 Processing content for intelligent responses..."):
-                # Chunk the website text
+            with st.spinner("🔍 Processing content..."):
                 self.text_chunks = self._chunk_text(self.website_text)
-                
-                # Generate embeddings
                 self.chunk_embeddings = self.embeddings_model.encode(
                     self.text_chunks, 
                     show_progress_bar=False,
                     convert_to_numpy=True
                 )
-                
                 st.success(f"✅ Successfully processed {len(self.text_chunks)} content sections")
                 
         except Exception as e:
             st.warning(f"⚠️ Error processing content: {e}")
-            # Fallback
-            self.text_chunks = ["General performance coaching information available."]
+            self.text_chunks = ["General coaching information available."]
             try:
                 self.chunk_embeddings = self.embeddings_model.encode(self.text_chunks)
             except:
-                self.chunk_embeddings = np.array([[0.0] * 384])  # Dummy embedding
+                self.chunk_embeddings = np.array([[0.0] * 384])
 
     def _get_relevant_chunks(self, query, k=3):
-        """Get most relevant content chunks for the query"""
+        """Get relevant content chunks"""
         if not self.embeddings_model or len(self.chunk_embeddings) == 0:
-            return self.text_chunks[:k] if self.text_chunks else ["General coaching guidance available."]
+            return self.text_chunks[:k] if self.text_chunks else ["General coaching available."]
             
         try:
-            # Encode the query
             query_embedding = self.embeddings_model.encode([query], convert_to_numpy=True)[0]
             
-            # Calculate similarities
             similarities = []
             for chunk_embedding in self.chunk_embeddings:
                 similarity = self._cosine_similarity(query_embedding, chunk_embedding)
                 similarities.append(similarity)
             
-            # Get top k most relevant chunks
             if similarities:
                 top_indices = sorted(range(len(similarities)), key=lambda i: similarities[i], reverse=True)[:k]
                 return [self.text_chunks[idx] for idx in top_indices]
@@ -229,94 +154,110 @@ class CompanyChatBot:
                 return self.text_chunks[:k]
                 
         except Exception as e:
-            st.warning(f"⚠️ Error retrieving relevant content: {e}")
             return self.text_chunks[:k]
 
-    def ask_question(self, user_query):
-        """Process user question and generate AI response"""
-        if not user_query or not user_query.strip():
-            return "Please ask a question, and I'll be happy to help you! 😊"
+    def _call_openai_direct(self, messages, max_tokens=350, temperature=0.7):
+        """Direct HTTP call to OpenAI API (proxy-free)"""
+        if not self.api_key:
+            return "API key not configured."
+        
+        try:
+            url = "https://api.openai.com/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": "gpt-3.5-turbo",
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature
+            }
+            
+            response = requests.post(url, headers=headers, json=data, timeout=30)
+            response.raise_for_status()
+            
+            result = response.json()
+            return result["choices"][0]["message"]["content"].strip()
+            
+        except requests.exceptions.RequestException as e:
+            if "rate limit" in str(e).lower():
+                return "⏰ Rate limit reached. Please wait a moment and try again."
+            elif "quota" in str(e).lower():
+                return "💳 API quota exceeded. Please check your OpenAI account."
+            else:
+                return f"⚠️ API request failed: {str(e)[:100]}..."
+        except Exception as e:
+            return f"⚠️ Unexpected error: {str(e)[:100]}..."
 
-        if not self.client:
-            return "❌ I'm having trouble connecting to the AI service. Please check if the OpenAI API key is properly configured in the app settings."
+    def ask_question(self, user_query):
+        """Process user question"""
+        if not user_query or not user_query.strip():
+            return "Please ask a question, and I'll be happy to help! 😊"
+
+        if not self.api_key:
+            return "❌ OpenAI API key is not configured. Please check the app settings."
 
         try:
-            # Get relevant content chunks
+            # Get relevant content
             relevant_chunks = self._get_relevant_chunks(user_query, k=3)
             context = "\n\n".join(relevant_chunks)
             
-            # Generate AI response
-            response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",  
-                max_tokens=350,
-                temperature=0.7,
-                messages=[
-                    {
-                        "role": "system", 
-                        "content": """You are a compassionate and empathetic Optimal Performance coach assistant. Your mission is to help people unlock their potential and achieve peak performance.
+            messages = [
+                {
+                    "role": "system", 
+                    "content": """You are a compassionate and empathetic Optimal Performance coach assistant. Your mission is to help people unlock their potential and achieve peak performance.
 
 🎯 **Your Core Approach:**
-- **Active Listening**: Validate feelings and truly understand their situation
-- **Thoughtful Inquiry**: Ask open-ended questions that promote self-discovery
-- **Empowering Guidance**: Help them find their own solutions rather than prescribing answers
-- **Trust Building**: Maintain warmth, authenticity, and genuine care
-- **Growth Mindset**: Gently challenge limiting beliefs and negative patterns
-- **Opportunity Focus**: Help them see challenges as growth opportunities
+- **Active Listening**: Validate feelings and understand their situation
+- **Thoughtful Inquiry**: Ask questions that promote self-discovery
+- **Empowering Guidance**: Help them find their own solutions
+- **Trust Building**: Maintain warmth and genuine care
+- **Growth Mindset**: Gently challenge limiting beliefs
+- **Opportunity Focus**: Help see challenges as growth opportunities
 
 💭 **For Emotional/Mental Concerns:**
-- Acknowledge their struggle without immediately trying to "fix" it
-- Create space for them to explore and express their feelings
+- Acknowledge their struggle without trying to "fix" it immediately
+- Create space for them to explore feelings
 - Normalize their experiences when appropriate
-- Guide them toward self-reflection and personal insights
-- Ask: "What does this situation want to teach you?"
+- Guide toward self-reflection and insights
 
-🚀 **For Performance/Goal-Related Questions:**
-- Focus on process improvement over outcome obsession
-- Break down big goals into small, actionable steps
-- Encourage experimentation and learning from setbacks
-- Connect their efforts to deeper purpose and values
-- Ask: "What would taking one small step forward look like?"
+🚀 **For Performance Questions:**
+- Focus on process over outcomes
+- Break goals into actionable steps
+- Encourage learning from setbacks
+- Connect efforts to deeper purpose
 
-📋 **Response Guidelines:**
-- Keep responses conversational and avoid being preachy
-- Use reflective language: "It sounds like...", "I hear you saying...", "Help me understand..."
+📋 **Guidelines:**
+- Keep responses conversational, not preachy
+- Use reflective language: "It sounds like...", "I hear..."
 - Balance empathy with gentle accountability
-- If questions are completely unrelated to coaching/performance, politely redirect
-- Always maintain confidentiality and create a safe space
-- End with a thoughtful question when appropriate
+- If unrelated to coaching, politely redirect
+- Maintain confidentiality and safety
+- End with thoughtful questions when appropriate
 
-Remember: You're not just giving advice - you're facilitating their own wisdom and growth. 🌱"""
-                    },
-                    {
-                        "role": "system", 
-                        "content": f"**Relevant Context from Company/Website** (use when applicable):\n{context}"
-                    },
-                    {
-                        "role": "user", 
-                        "content": user_query
-                    }
-                ]
-            )
+Remember: You're facilitating their own wisdom and growth. 🌱"""
+                },
+                {
+                    "role": "system", 
+                    "content": f"**Context from Company/Website** (use when relevant):\n{context}"
+                },
+                {
+                    "role": "user", 
+                    "content": user_query
+                }
+            ]
             
-            return response.choices[0].message.content.strip()
+            return self._call_openai_direct(messages)
             
         except Exception as e:
-            error_msg = str(e).lower()
-            if "rate limit" in error_msg:
-                return "⏰ I'm receiving many questions right now. Please wait a moment and try again."
-            elif "quota" in error_msg or "billing" in error_msg:
-                return "💳 The AI service is temporarily unavailable due to quota limits. Please try again later or contact support."
-            elif "api key" in error_msg or "authentication" in error_msg:
-                return "🔑 There's an authentication issue with the API key. Please contact the administrator."
-            elif "timeout" in error_msg:
-                return "⏱️ The request timed out. Please try asking your question again."
-            else:
-                return "⚠️ I'm experiencing technical difficulties right now. Please try again in a moment."
+            return f"⚠️ I'm experiencing technical difficulties: {str(e)[:100]}..."
     
     def run(self):
         """Main application interface"""
         
-        # Custom CSS for better styling
+        # Custom CSS
         st.markdown("""
         <style>
         .main-header {
@@ -333,27 +274,10 @@ Remember: You're not just giving advice - you're facilitating their own wisdom a
             margin-bottom: 2rem;
             font-style: italic;
         }
-        .chat-container {
-            max-height: 600px;
-            overflow-y: auto;
-        }
-        .sidebar-content {
-            background: #F8F9FA;
-            padding: 1rem;
-            border-radius: 10px;
-            margin: 0.5rem 0;
-        }
-        .feature-box {
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 1rem;
-            border-radius: 10px;
-            margin: 1rem 0;
-        }
         </style>
         """, unsafe_allow_html=True)
         
-        # Main Header
+        # Header
         st.markdown("""
         <div class="main-header">🤖 OP AI</div>
         <div class="sub-header">Your Optimal Performance Coach</div>
@@ -361,7 +285,7 @@ Remember: You're not just giving advice - you're facilitating their own wisdom a
         
         st.markdown("---")
         
-        # Check if everything is properly initialized
+        # Check API key
         if not self.api_key:
             st.error("🔑 **Configuration Required**")
             st.info("""
@@ -393,101 +317,65 @@ I'm your Optimal Performance Coach, here to support you on your journey to peak 
                 }
             ]
         
-        # Chat Interface
-        chat_container = st.container()
+        # Display chat history
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
         
-        with chat_container:
-            # Display chat history
-            for message in st.session_state.messages:
-                with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
-        
-        # Chat Input
+        # Chat input
         if prompt := st.chat_input("💬 Share what's on your mind...", key="user_input"):
-            # Add user message to history
+            # Add user message
             st.session_state.messages.append({"role": "user", "content": prompt})
             
-            # Display user message
             with st.chat_message("user"):
                 st.markdown(prompt)
             
-            # Generate and display assistant response
+            # Generate response
             with st.chat_message("assistant"):
-                with st.spinner("🤔 Thinking deeply about your question..."):
+                with st.spinner("🤔 Thinking..."):
                     response = self.ask_question(prompt)
                 st.markdown(response)
             
-            # Add assistant response to history
+            # Add to history
             st.session_state.messages.append({"role": "assistant", "content": response})
         
         # Sidebar
         with st.sidebar:
             st.markdown("### 🌟 About OP AI")
             st.markdown("""
-            <div class="sidebar-content">
             Your AI-powered performance coach designed to help you:
-            <br><br>
-            🎯 <strong>Achieve Goals</strong> - Strategic planning & execution<br>
-            💪 <strong>Build Resilience</strong> - Overcome setbacks & challenges<br>
-            🧠 <strong>Growth Mindset</strong> - Transform limiting beliefs<br>
-            🤝 <strong>Emotional Support</strong> - Navigate difficult emotions<br>
-            ⚡ <strong>Peak Performance</strong> - Optimize your potential
-            </div>
-            """, unsafe_allow_html=True)
             
-            st.markdown("### 🔒 Privacy & Confidentiality")
-            st.info("Your conversations are private and secure. Nothing is stored permanently.")
+            🎯 **Achieve Goals** - Strategic planning & execution  
+            💪 **Build Resilience** - Overcome challenges  
+            🧠 **Growth Mindset** - Transform limiting beliefs  
+            🤝 **Emotional Support** - Navigate difficulties  
+            ⚡ **Peak Performance** - Optimize your potential
+            """)
             
-            st.markdown("### 🛠️ Chat Management")
-            if st.button("🗑️ Clear Chat History", help="Start a fresh conversation"):
+            st.markdown("### 🔒 Privacy")
+            st.info("Your conversations are private and secure.")
+            
+            if st.button("🗑️ Clear Chat History"):
                 st.session_state.messages = [
                     {
                         "role": "assistant", 
-                        "content": "Hello again! I'm ready for a fresh conversation. What would you like to explore today? 😊"
+                        "content": "Hello again! Ready for a fresh conversation. What would you like to explore? 😊"
                     }
                 ]
                 st.rerun()
-            
-            st.markdown("### 💡 Tips for Better Conversations")
-            st.markdown("""
-            <div class="sidebar-content">
-            • <strong>Be specific</strong> about your situation<br>
-            • <strong>Share context</strong> - what's really going on?<br>
-            • <strong>Ask follow-up questions</strong><br>
-            • <strong>Be open</strong> to exploring new perspectives<br>
-            • <strong>Take your time</strong> - there's no rush
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Debug info for development
-            if st.checkbox("🔧 Debug Info", help="Show technical details"):
-                st.markdown("**System Status:**")
-                st.write(f"✅ API Key: {'Configured' if self.api_key else 'Missing'}")
-                st.write(f"✅ Website Content: {len(self.website_text)} characters")
-                st.write(f"✅ Content Chunks: {len(self.text_chunks)}")
-                st.write(f"✅ Embeddings: {'Ready' if len(self.chunk_embeddings) > 0 else 'Not Ready'}")
-                st.write(f"✅ OpenAI Client: {'Connected' if self.client else 'Error'}")
 
-# Main Application Entry Point
+# Main function
 def main():
-    """Initialize and run the OP AI application"""
+    """Initialize and run the application"""
     try:
-        # Initialize chatbot
         chatbot = CompanyChatBot(
             website_url="https://optimalperformancesystem.com/"
         )
-        
-        # Run the application
         chatbot.run()
         
     except Exception as e:
         st.error(f"❌ **Application Error**: {e}")
-        st.info("Please refresh the page. If the problem persists, contact support.")
-        
-        # Show detailed error for debugging
-        with st.expander("🔧 Technical Details", expanded=False):
-            st.code(str(e))
+        st.info("Please refresh the page or contact support.")
 
-# Application Entry Point
 if __name__ == "__main__":
     main()
