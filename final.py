@@ -39,31 +39,64 @@ class CompanyChatBot:
             self.embeddings_model = None
 
     def _initialize_openai_client(self):
-        """Initialize OpenAI client with deployment-friendly settings"""
-        try:
-            if not self.api_key:
-                st.error("🔑 **OpenAI API Key Missing!**")
-                st.info("""
-                **To fix this:**
-                1. Go to your Streamlit Cloud app settings
-                2. Click on "Secrets" tab
-                3. Add: `OPENAI_API_KEY = "your-api-key-here"`
-                4. Save and restart the app
-                """)
-                return None
-            
-            # Deployment-friendly OpenAI client initialization
-            client = OpenAI(
-                api_key=self.api_key,
-                base_url="https://api.openai.com/v1",
-                timeout=30.0,
-                max_retries=2
-            )
-                
-            return client
-        except Exception as e:
-            st.error(f"❌ Error initializing OpenAI client: {e}")
+        """Initialize OpenAI client with multiple fallback methods"""
+        if not self.api_key:
+            st.error("🔑 **OpenAI API Key Missing!**")
+            st.info("""
+            **To fix this:**
+            1. Go to your Streamlit Cloud app settings
+            2. Click on "Secrets" tab
+            3. Add: `OPENAI_API_KEY = "your-api-key-here"`
+            4. Save and restart the app
+            """)
             return None
+        
+        # Try multiple initialization methods
+        initialization_methods = [
+            # Method 1: Minimal initialization
+            lambda: OpenAI(api_key=self.api_key),
+            
+            # Method 2: With explicit base URL
+            lambda: OpenAI(
+                api_key=self.api_key,
+                base_url="https://api.openai.com/v1"
+            ),
+            
+            # Method 3: With timeout but no other params
+            lambda: OpenAI(
+                api_key=self.api_key,
+                timeout=30.0
+            ),
+            
+            # Method 4: Direct HTTP approach (fallback)
+            lambda: self._create_direct_client()
+        ]
+        
+        for i, method in enumerate(initialization_methods, 1):
+            try:
+                client = method()
+                # Test the client with a simple call
+                try:
+                    # Quick test - don't actually call the API, just initialize
+                    if hasattr(client, 'api_key'):
+                        return client
+                except:
+                    pass
+                return client
+            except Exception as e:
+                if i == len(initialization_methods):
+                    st.error(f"❌ All OpenAI client initialization methods failed. Last error: {e}")
+                    return None
+                continue
+        
+        return None
+    
+    def _create_direct_client(self):
+        """Fallback: Create client with minimal configuration"""
+        import openai
+        # Set the API key directly (older method)
+        openai.api_key = self.api_key
+        return OpenAI(api_key=self.api_key)
 
     def _scrape_website(self):
         """Scrape website content with robust error handling"""
