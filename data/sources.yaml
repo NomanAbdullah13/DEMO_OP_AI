@@ -1,1 +1,80 @@
 
+sources:
+  - url: https://www.who.int/health-topics/mental-health
+    tier: 1
+    source_id: WHO_mental_health
+    age_applicability: all
+    pub_year: 2024
+    doc_type: guideline
+  - url: https://www.who.int/publications/i/item/9789240053052
+    tier: 1
+    source_id: WHO_mental_health_at_work
+    age_applicability: adult
+    pub_year: 2022
+    doc_type: guideline
+  - url: https://www.who.int/news-room/fact-sheets/detail/mental-health-strengthening-our-response
+    tier: 1
+    source_id: WHO_mental_health_facts
+    age_applicability: all
+    pub_year: 2022
+    doc_type: factsheet
+  - url: https://www.nimh.nih.gov/health/topics/depression
+    tier: 1
+    source_id: NIMH_depression
+    age_applicability: all
+    pub_year: 2024
+    doc_type: guideline
+  - url: https://www.nimh.nih.gov/health/topics/anxiety-disorders
+    tier: 1
+    source_id: NIMH_anxiety
+    age_applicability: all
+    pub_year: 2024
+    doc_type: guideline
+  - url: https://www.samhsa.gov/substance-use/treatment/co-occurring-disorders
+    tier: 1
+    source_id: SAMHSA_co_occurring
+    age_applicability: all
+    pub_year: 2024
+    doc_type: guideline
+  - url: https://www.mayoclinic.org/healthy-lifestyle/stress-management/in-depth/stress-relievers/art-20047257
+    tier: 1
+    source_id: Mayo_stress_relievers
+    age_applicability: all
+    pub_year: 2023
+    doc_type: guideline
+  - url: https://www.cdc.gov/mental-health/index.html
+    tier: 1
+    source_id: CDC_mental_health
+    age_applicability: all
+    pub_year: 2024
+    doc_type: guideline
+  - url: https://www.who.int/news-room/fact-sheets/detail/healthy-diet
+    tier: 1
+    source_id: WHO_healthy_diet
+    age_applicability: all
+    pub_year: 2020
+    doc_type: factsheet
+  - url: https://prevention.nih.gov/
+    tier: 1
+    source_id: NIH_preventive_care
+    age_applicability: all
+    pub_year: 2023
+    doc_type: guideline
+  - url: https://lifestylemedicine.org/project/dietaryguidelines/
+    tier: 1
+    source_id: ACLM_dietary_guidelines
+    age_applicability: all
+    pub_year: 2023
+    doc_type: guideline
+  - url: https://www.medicalnewstoday.com/
+    tier: 3
+    source_id: MNT_health_info
+    age_applicability: all
+    pub_year: 2024
+    doc_type: info
+  - url: https://www.apa.org/topics
+    tier: 1
+    source_id: APA_psychology_topics
+    age_applicability: all
+    pub_year: 2021
+    doc_type: info
